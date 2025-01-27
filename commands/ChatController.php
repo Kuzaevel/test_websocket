@@ -2,17 +2,13 @@
 
 namespace app\commands;
 
-use app\models\Book;
-use app\models\Chat;
 use app\models\Message;
 use app\models\User;
 use Workerman\Connection\TcpConnection;
 use Workerman\Worker;
-use Yii;
 use yii\console\Controller;
 use yii\db\Exception;
 use yii\helpers\Console;
-use yii\web\Request;
 
 class ChatController extends Controller
 {
@@ -20,12 +16,13 @@ class ChatController extends Controller
 
     public function actionRun() {
 
-        $this->stdout("Run it  ", Console::BG_GREEN);
-
+        $this->stdout("Run it\n", Console::BG_GREEN);
+        //TODO move to parameters
         $worker = new Worker('websocket://test.local:8080');
         $worker->onWebSocketConnect = [$this, 'onConnect'];
         $worker->onClose = [$this, 'onClose'];
         $worker->onMessage = [$this, 'onMessage'];
+        $worker->onError = [$this, 'onError'];
 
         Worker::runAll();
     }
@@ -43,47 +40,46 @@ class ChatController extends Controller
 
         try {
             $user = User::findIdentityByAccessToken($token);
-            if(is_null($user)) {
-                $this->stdout("No user found");
-                $this->onClose($connection);
-                return false;
+            if (is_null($user)) {
+                throw new Exception("No user found");
             }
-        } catch (\Exception $e) {
-            $message = $e->getMessage();  //throw $e;
-            $this->stdout("Error while getting user :: " . $message . " \n");
-        } catch (\Throwable $e) {
-            $message = $e->getMessage();  //throw $e;
-            $this->stdout("Error while getting user :: " . $message . " \n");
+            $this->connections[$connection->id]['connection'] = $connection;
+            $this->connections[$connection->id]['token'] = $_GET['token'];
+            $this->connections[$connection->id]['user_id'] = $user->id;
+            $this->stdout("New connection added by user :: " . $user->username . "\n" );
+        } catch (Exception $e) {
+            $this->onError($connection, "Error while getting user :: " . $e->getMessage());
         }
-        $this->connections[$connection->id]['connection'] = $connection;
-        $this->connections[$connection->id]['token'] = $_GET['token'];
-        $this->connections[$connection->id]['user_id'] = $user->id;
-
-        $this->stdout("\nNew connection added by user :: " . $user->username . "\n" );
     }
+
+    public function onError(TcpConnection $connection, $message) {
+        $this->stdout("$message\n");
+        $connection->close();
+   }
 
     public function onClose(TcpConnection $connection) {
         $this->stdout("Connection closed \n");
+        //TODO add removing from connections array
     }
 
     public function onMessage(TcpConnection $connection, string $data)
     {
         $payload = json_decode($data, true);
+
         switch ($payload['method']) {
             case 'sendMessage':
-                $response = $this->sendMessage($connection, $payload);
+                $this->sendMessage($connection, $payload);
                 break;
             default:
-                $response = null; // или какое-то другое значение по умолчанию
+                $resp = json_encode(
+                [
+                    'data' => [
+                        'message' => 'method not specified',
+                    ]
+                ]);
+                $this->sendMessage($connection, $resp);
                 break;
         }
-
-        $connection->send(json_encode(
-                [
-                    'method' => $payload['method'],
-                    'data' => $response,
-                ])
-        );
     }
 
     private function sendMessage(TcpConnection $connection, $payload) {
@@ -98,7 +94,7 @@ class ChatController extends Controller
 
         $resp = json_encode(
             [
-                'method' => 'newMessage',
+                'method' => 'sendMessage',
                 'data' => [
                     'message' => $message->toArray(),
                 ]
@@ -106,10 +102,9 @@ class ChatController extends Controller
 
         foreach ($this->connections as $conn) {
             // отправляем всем, кроме текущего
-            if ($conn['connection']->id === $connection->id) {
+            if ($conn['connection']->id == $connection->id) {
                 continue;
             }
-
             $conn['connection']->send($resp);
         }
 
