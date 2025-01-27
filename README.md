@@ -8,8 +8,10 @@ git clone https://github.com/Kuzaevel/test_websocket.git
 Устанавливаем зависимости с помощью composer
 - composer install
 
+Создаем базу данных MySql test_socket
+
 Восстанавливаем базу данных с помощью миграций
-./yii migrate
+$ yii migrate
 
 Запускаем из командно строки приложение:
 $ yii chat/run
