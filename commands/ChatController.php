@@ -6,6 +6,7 @@ use app\models\Message;
 use app\models\User;
 use Workerman\Connection\TcpConnection;
 use Workerman\Worker;
+use Yii;
 use yii\console\Controller;
 use yii\db\Exception;
 use yii\helpers\Console;
@@ -15,10 +16,8 @@ class ChatController extends Controller
     public $connections = array();
 
     public function actionRun() {
-
         $this->stdout("Run it\n", Console::BG_GREEN);
-        //TODO move to parameters
-        $worker = new Worker('websocket://test.local:8080');
+        $worker = new Worker(Yii::$app->params['websocketAddress']);
         $worker->onWebSocketConnect = [$this, 'onConnect'];
         $worker->onClose = [$this, 'onClose'];
         $worker->onMessage = [$this, 'onMessage'];
@@ -107,9 +106,5 @@ class ChatController extends Controller
             }
             $conn['connection']->send($resp);
         }
-
-        return [
-            'message' => $message->toArray()
-        ];
     }
 }
