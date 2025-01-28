@@ -58,7 +58,14 @@ class ChatController extends Controller
 
     public function onClose(TcpConnection $connection) {
         $this->stdout("Connection closed \n");
-        //TODO add removing from connections array
+
+        //removing from connections array
+        foreach ($this->connections as $key => $value) {
+            if ($value['connection']->id == $connection->id) {
+                unset($this->connections[$key]);
+                break;
+            }
+        }
     }
 
     public function onMessage(TcpConnection $connection, string $data)
@@ -67,18 +74,21 @@ class ChatController extends Controller
 
         switch ($payload['method']) {
             case 'sendMessage':
-                $this->sendMessage($connection, $payload);
+                $response = $this->sendMessage($connection, $payload);
                 break;
+            case 'sendMessageToUser':
+                //TODO add method
             default:
-                $resp = json_encode(
-                [
-                    'data' => [
-                        'message' => 'method not specified',
-                    ]
-                ]);
-                $this->sendMessage($connection, $resp);
+                $response = ['message' => 'method not specified'];
                 break;
         }
+
+        $connection->send(json_encode(
+            [
+                'method' => $payload['method'],
+                'data' => $response,
+            ])
+        );
     }
 
     private function sendMessage(TcpConnection $connection, $payload) {
@@ -106,5 +116,7 @@ class ChatController extends Controller
             }
             $conn['connection']->send($resp);
         }
+
+        return ['message' => 'Message sent to all online user'];
     }
 }

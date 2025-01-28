@@ -36,5 +36,6 @@ $ yii chat/run
 
 Для авторизации используется QueryToken - token:
 
-composer config -g -- disable-tls true
+Дополнительно для установки зависимостей может потребоваться отключить tls: 
+- composer config -g -- disable-tls true
 
